@@ -21,7 +21,15 @@ BINS_OUT_DIR      := $(OUT_DIR)/$(GOOS)_$(GOARCH)/$(BUILDTYPE_DIR)
 .PHONY: build
 build:
 	$(info $(INFOMARK) Building $(CLI_BINARY) ...)
-	go build -o $(BINS_OUT_DIR)/$(CLI_BINARY)
+	go build -o $(BINS_OUT_DIR)/$(CLI_BINARY) ./cmd/copa-wiz
+
+################################################################################
+# Target: install — puts copa-wiz on $GOBIN or $GOPATH/bin (must be on $PATH)  #
+################################################################################
+.PHONY: install
+install:
+	$(info $(INFOMARK) Installing $(CLI_BINARY) to $(shell go env GOPATH)/bin ...)
+	go install ./cmd/copa-wiz
 
 ################################################################################
 # Target: test - unit testing                                                  #

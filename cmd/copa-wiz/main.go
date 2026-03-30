@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/project-copacetic/scanner-plugin-template/internal/wiz"
 )
 
 func main() {
@@ -13,8 +15,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	parser := newWizParser()
-	report, err := parser.parse(os.Args[1])
+	report, err := wiz.NewParser().Parse(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing report: %v\n", err)
 		os.Exit(1)
