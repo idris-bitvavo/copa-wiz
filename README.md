@@ -18,7 +18,7 @@ Learn more: [Copacetic scanner plugins](https://project-copacetic.github.io/copa
 ### Out of scope (for now)
 
 - **Language / app packages** (e.g. `result.cpes`, `result.libraries`, Python `pip` fixes) — Copacetic’s Debian/Ubuntu path targets **dpkg** OS packages; those findings are ignored.
-- **RPM/Alpine** images — this plugin expects **Debian-style** `debNNu` version suffixes to infer the OS release. Extend [`internal/wiz/wiz.go`](internal/wiz/wiz.go) if you need other distros.
+- **RPM/Alpine** images — this plugin expects **Debian-style** `debNNu` version suffixes to infer the OS release. Extend `wiz.go` if you need other distros.
 
 ## Input format
 
@@ -27,7 +27,7 @@ Compatible with Wiz exports where:
 - Top level includes **`result`**.
 - **`result.osPackages`** is a non-empty array of objects with **`name`**, **`version`**, and **`vulnerabilities`**.
 
-A **minimal** example is in [`testdata/wiz_minimal.json`](testdata/wiz_minimal.json): two **`osPackages`** rows taken from the real scan (`openssl` and `libssl3`), same versions as [`testdata/wiz_full_sample.json`](testdata/wiz_full_sample.json). The first has a **fixable** CVE; the second keeps the same CVE but an **empty `fixedVersion`** to show that entries without a fix are skipped. A **full** export is in [`testdata/wiz_full_sample.json`](testdata/wiz_full_sample.json).
+A **minimal** example is in [`testdata/wiz_minimal.json`](testdata/wiz_minimal.json). A **real** container scan sample is in [`testdata/wiz_full_sample.json`](testdata/wiz_full_sample.json).
 
 ## Build
 
@@ -38,54 +38,16 @@ make
 # binary: dist/$(go env GOOS)_$(go env GOARCH)/release/copa-wiz
 ```
 
-The executable lives under **`cmd/copa-wiz`** so `go install` produces a binary named **`copa-wiz`** (not the repository folder name).
-
-## Install on PATH (required for `copa patch`)
-
-Copacetic runs **`copa-wiz`** with **`exec.LookPath`**: the binary must exist in **`$PATH`** in the **same environment** where you run **`copa`** (your laptop, CI job, or container). If you see `executable file not found in $PATH`, the plugin is not installed or your PATH does not include its directory.
-
-### Option A — `go install` (recommended)
-
-From a clone of this repository:
-
-```shell
-go install ./cmd/copa-wiz
-```
-
-This installs to **`$(go env GOBIN)`** if set, otherwise **`$(go env GOPATH)/bin`**. Ensure that directory is on PATH, for example:
-
-```shell
-export PATH="$(go env GOPATH)/bin:$PATH"
-# or, if you use GOBIN:
-export PATH="$(go env GOBIN):$PATH"
-```
-
-Or use **`make install`**, which runs the same `go install`.
-
-Verify:
-
-```shell
-which copa-wiz
-copa-wiz testdata/wiz_minimal.json | head -c 200
-```
-
-### Option B — `make build` and extend PATH
-
-```shell
-make
-export PATH="$PATH:$(pwd)/dist/$(go env GOOS)_$(go env GOARCH)/release"
-```
-
-### CI / Docker
-
-If **`copa`** runs inside a container or remote runner, install **`copa-wiz`** into that same image or job (copy the binary or run `go install` there). Mounting only the report file is not enough; the **`copa-wiz`** executable must be present where **`copa`** executes.
-
 ## Usage
 
 ```shell
-# After copa-wiz is on PATH (see above)
+# Build and put copa-wiz on PATH
+export PATH="$PATH:$(pwd)/dist/$(go env GOOS)_$(go env GOARCH)/release"
+
+# Inspect normalized manifest
 copa-wiz testdata/wiz_minimal.json | jq .
 
+# Patch an image with Copacetic (report from Wiz)
 copa patch -i "$IMAGE" -r /path/to/wiz-report.json --scanner wiz
 ```
 
@@ -98,3 +60,4 @@ go test ./...
 ## Origins
 
 This project was derived from the official [scanner-plugin-template](https://github.com/project-copacetic/scanner-plugin-template) and adapted for **Wiz** container scan JSON.
+ 

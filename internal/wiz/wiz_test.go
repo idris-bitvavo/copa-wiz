@@ -1,8 +1,10 @@
 package wiz
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	v1alpha1 "github.com/project-copacetic/copacetic/pkg/types/v1alpha1"
@@ -45,6 +47,25 @@ func Test_parseReport_errors(t *testing.T) {
 				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func Test_parseReport_rejectsLargeFile(t *testing.T) {
+	t.Parallel()
+	f, err := os.CreateTemp(t.TempDir(), "wiz-too-large-*.json")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer f.Close()
+
+	// Write one byte above the configured limit.
+	_, err = f.WriteString(strings.Repeat("a", int(maxReportSizeBytes)+1))
+	if err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	if _, err := parseReport(f.Name()); err == nil {
+		t.Fatal("expected parseReport to reject oversized file")
 	}
 }
 

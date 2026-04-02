@@ -3,6 +3,7 @@ package wiz
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -31,12 +32,33 @@ type vulnerability struct {
 }
 
 var debReleaseRe = regexp.MustCompile(`deb(\d+)u`)
+var debAltReleaseRe = regexp.MustCompile(`\+deb(\d+)`)
+
+const maxReportSizeBytes int64 = 25 * 1024 * 1024 // 25 MiB
 
 func parseReport(path string) (*report, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if st.Size() > maxReportSizeBytes {
+		return nil, fmt.Errorf("wiz report too large: %d bytes exceeds max %d", st.Size(), maxReportSizeBytes)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, maxReportSizeBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxReportSizeBytes {
+		return nil, fmt.Errorf("wiz report exceeds max size %d bytes", maxReportSizeBytes)
+	}
+
 	var r report
 	if err = json.Unmarshal(data, &r); err != nil {
 		return nil, fmt.Errorf("wiz report JSON: %w", err)
@@ -73,9 +95,8 @@ func inferDebianRelease(pkgs []osPackage) string {
 			}
 		}
 	}
-	alt := regexp.MustCompile(`\+deb(\d+)`)
 	for _, p := range pkgs {
-		if m := alt.FindStringSubmatch(p.Version); len(m) == 2 {
+		if m := debAltReleaseRe.FindStringSubmatch(p.Version); len(m) == 2 {
 			return m[1]
 		}
 	}

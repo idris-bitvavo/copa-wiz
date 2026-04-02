@@ -32,6 +32,14 @@ install:
 	go install ./cmd/copa-wiz
 
 ################################################################################
+# Target: install-system — /usr/local/bin (survives minimal GUI / Docker PATH) #
+################################################################################
+.PHONY: install-system
+install-system: build
+	$(info $(INFOMARK) Installing $(CLI_BINARY) to /usr/local/bin (requires sudo) ...)
+	sudo install -m 0755 $(BINS_OUT_DIR)/$(CLI_BINARY) /usr/local/bin/$(CLI_BINARY)
+
+################################################################################
 # Target: test - unit testing                                                  #
 ################################################################################
 .PHONY: test

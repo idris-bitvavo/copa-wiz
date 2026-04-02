@@ -27,5 +27,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	os.Stdout.Write(reportBytes)
+	if _, err := os.Stdout.Write(reportBytes); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing report to stdout: %v\n", err)
+		os.Exit(1)
+	}
 }
