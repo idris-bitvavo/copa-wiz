@@ -10,6 +10,10 @@ jobs:
     name: "Copa Patch"
     runs-on: ubuntu-latest
     steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
       - name: Install Copacetic (copa)
         run: |
           COPA_VERSION=$(curl -s https://api.github.com/repos/project-copacetic/copacetic/releases/latest | grep tag_name | cut -d '"' -f 4)
@@ -17,3 +21,8 @@ jobs:
           tar -xzf copa.tar.gz
           sudo mv copa /usr/local/bin/copa
           copa -v
+      - name: Build copa-wiz
+        run: |
+          make
+          export PATH="$PATH:$(pwd)/dist/$(go env GOOS)_$(go env GOARCH)/release"
+          copa-wiz testdata/wiz_minimal.json | jq .
