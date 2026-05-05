@@ -26,3 +26,9 @@ jobs:
           make
           export PATH="$PATH:$(pwd)/dist/$(go env GOOS)_$(go env GOARCH)/release"
           copa-wiz testdata/wiz_minimal.json | jq .
+          docker pull nginx:1.21.6
+          copa patch -r testdata/nginx-wiz-report.json -i nginx:1.21.6 --scanner wiz
+          cat testdata/nginx-wiz-report.json | jq .
+      - name: Patch test image with copa-wiz plugin
+        run: |
+          copa patch -r testdata/nginx-wiz-report.json -i nginx:1.21.6 --scanner wiz
