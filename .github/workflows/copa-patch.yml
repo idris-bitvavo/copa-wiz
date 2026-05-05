@@ -1,0 +1,19 @@
+name: "Copa Patch"
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copa-patch:
+    name: "Copa Patch"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Copacetic (copa)
+        run: |
+          COPA_VERSION=$(curl -s https://api.github.com/repos/project-copacetic/copacetic/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -Lo copa.tar.gz https://github.com/project-copacetic/copacetic/releases/download/${COPA_VERSION}/copa_${COPA_VERSION#v}_linux_amd64.tar.gz
+          tar -xzf copa.tar.gz
+          sudo mv copa /usr/local/bin/copa
+          copa -v
