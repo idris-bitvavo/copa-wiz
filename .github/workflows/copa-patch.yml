@@ -1,0 +1,86 @@
+name: "Copa Patch"
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copa-patch:
+    name: "Copa Patch"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Copacetic (copa)
+        # Pin Copacetic to the version this plugin builds against (matches go.mod's copacetic dep).
+        # Using releases/latest caused local-vs-CI drift (e.g. v0.14.0 was released on 2026-05-05 and
+        # changed scanner-plugin pinning vs v0.13.x). Bump this together with go.mod when you upgrade.
+        env:
+          COPA_VERSION: v0.13.0
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o copa.tar.gz "https://github.com/project-copacetic/copacetic/releases/download/${COPA_VERSION}/copa_${COPA_VERSION#v}_linux_amd64.tar.gz"
+          tar -xzf copa.tar.gz
+          sudo install -m 0755 copa /usr/local/bin/copa
+          copa -v
+
+      - name: Show Docker / BuildKit context (diagnostics)
+        # BuildKit is NOT the source of "no package updates found for image".
+        # If BuildKit were unreachable copa would say: "All BuildKit connection checks exhausted".
+        # We log the environment so failures here are obvious if they ever occur.
+        run: |
+          set -eux
+          docker version
+          docker buildx version || true
+          docker info --format '{{json .}}' \
+            | jq '{ServerVersion, OperatingSystem, KernelVersion, DefaultRuntime}' || true
+
+      - name: Build and install copa-wiz
+        run: |
+          set -euxo pipefail
+          make
+          # Copacetic resolves the plugin via PATH (exec.Command("copa-wiz", reportPath)).
+          # Install next to /usr/local/bin/copa so every later step finds it without PATH wiring.
+          sudo install -m 0755 \
+            "$(pwd)/dist/$(go env GOOS)_$(go env GOARCH)/release/copa-wiz" \
+            /usr/local/bin/copa-wiz
+          command -v copa-wiz
+
+      - name: Verify scanner output for the report being patched
+        # Proves what copa actually sees from the plugin for nginx-wiz-report.json.
+        # If update_count == 0 here, copa will print "no package updates found for image".
+        run: |
+          set -euxo pipefail
+          copa-wiz testdata/nginx-wiz-report.json \
+            | tee /tmp/copa-wiz-manifest.json \
+            | jq '{
+                apiVersion,
+                metadata,
+                update_count: (.updates | length),
+                first_three:  (.updates[0:3])
+              }'
+          count="$(jq '.updates | length' /tmp/copa-wiz-manifest.json)"
+          if [ "${count}" -eq 0 ]; then
+            echo "::error::copa-wiz produced 0 updates for testdata/nginx-wiz-report.json on this runner"
+            exit 1
+          fi
+
+      - name: Patch test image with copa-wiz plugin
+        run: |
+          set -euxo pipefail
+          docker pull nginx:1.21.6
+          # --debug surfaces the BuildKit driver used and the package-manager probe results,
+          # which is what you actually want when triaging "no package updates found".
+          copa patch --debug \
+            -r testdata/nginx-wiz-report.json \
+            -i nginx:1.21.6 \
+            --scanner wiz
