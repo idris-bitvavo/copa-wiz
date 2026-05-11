@@ -33,14 +33,26 @@ jobs:
           sudo install -m 0755 copa /usr/local/bin/copa
           copa -v
 
+      - name: Set up a BuildKit instance Copa can use (MergeOp + DiffOp)
+        # The default BuildKit served by Docker on ubuntu-latest uses the *overlayfs*
+        # snapshotter, which refuses LLB MergeOp/DiffOp:
+        #   "requested experimental feature mergeop/diffop has been disabled on the
+        #    build server: only enabled with containerd image store backend"
+        # Copa requires both (pkg/buildkit/drivers.go: requiredCaps = MergeOp, DiffOp).
+        # docker-buildx with the docker-container driver runs BuildKit *in a container*,
+        # which has these capabilities regardless of the host snapshotter, so copa's
+        # buildx driver auto-picks it up.
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          install: true   # also makes `docker build` use this builder
+
       - name: Show Docker / BuildKit context (diagnostics)
-        # BuildKit is NOT the source of "no package updates found for image".
-        # If BuildKit were unreachable copa would say: "All BuildKit connection checks exhausted".
-        # We log the environment so failures here are obvious if they ever occur.
         run: |
           set -eux
           docker version
-          docker buildx version || true
+          docker buildx version
+          docker buildx inspect --bootstrap
           docker info --format '{{json .}}' \
             | jq '{ServerVersion, OperatingSystem, KernelVersion, DefaultRuntime}' || true
 
