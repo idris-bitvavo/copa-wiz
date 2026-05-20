@@ -25,10 +25,10 @@ jobs:
         # Using releases/latest caused local-vs-CI drift (e.g. v0.14.0 was released on 2026-05-05 and
         # changed scanner-plugin pinning vs v0.13.x). Bump this together with go.mod when you upgrade.
         env:
-          COPA_VERSION: v0.13.0
+          COPA_VERSION: v0.14.0-rc.3
         run: |
           set -euxo pipefail
-          curl -fsSL -o copa.tar.gz "https://github.com/project-copacetic/copacetic/releases/download/${COPA_VERSION}/copa_${COPA_VERSION#v}_linux_amd64.tar.gz"
+          curl -fsSL -o copa.tar.gz "https://github.com/idris-bitvavo/copacetic/releases/download/${COPA_VERSION}/copa_${COPA_VERSION#v}_linux_amd64.tar.gz"
           tar -xzf copa.tar.gz
           sudo install -m 0755 copa /usr/local/bin/copa
           copa -v
