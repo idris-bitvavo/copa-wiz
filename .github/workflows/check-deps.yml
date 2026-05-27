@@ -30,10 +30,11 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           persist-credentials: false
-      - name: Set up Go 1.21
+      - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: "1.21"
+          go-version-file: go.mod
+          cache: true
       - name: Check go.mod
         shell: bash
         run: |

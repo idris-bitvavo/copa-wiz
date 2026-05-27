@@ -45,4 +45,4 @@ install-system: build
 .PHONY: test
 test:
 	$(info $(INFOMARK) Running unit tests on pkg libraries ...)
-	go test ./... $(CODECOV_OPTS)
+	go test ./internal/... $(CODECOV_OPTS)
