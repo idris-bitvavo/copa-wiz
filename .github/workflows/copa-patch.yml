@@ -8,7 +8,7 @@ permissions:
 jobs:
   copa-patch:
     name: "Copa Patch"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4core
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -34,7 +34,7 @@ jobs:
           copa -v
 
       - name: Set up a BuildKit instance Copa can use (MergeOp + DiffOp)
-        # The default BuildKit served by Docker on ubuntu-latest uses the *overlayfs*
+        # The default BuildKit served by Docker on ubuntu-latest-4core uses the *overlayfs*
         # snapshotter, which refuses LLB MergeOp/DiffOp:
         #   "requested experimental feature mergeop/diffop has been disabled on the
         #    build server: only enabled with containerd image store backend"
