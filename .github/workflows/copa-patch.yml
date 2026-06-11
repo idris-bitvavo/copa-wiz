@@ -1,0 +1,106 @@
+name: "Copa Patch"
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copa-patch:
+    name: "Copa Patch"
+    runs-on: ubuntu-latest-4core
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Copacetic (copa)
+        env:
+          COPA_VERSION: v0.14.0
+          COPACETIC_REPO: bitvavo/copacetic
+          GH_TOKEN: ${{ secrets.COPACETIC_RELEASE_TOKEN }}
+        run: |
+          set -euxo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing COPACETIC_RELEASE_TOKEN secret (needs contents:read on ${COPACETIC_REPO})."
+            exit 1
+          fi
+          gh release download "${COPA_VERSION}" \
+            --repo "${COPACETIC_REPO}" \
+            --pattern "copa_${COPA_VERSION#v}_linux_amd64.tar.gz" \
+            --dir .
+          tar -xzf "copa_${COPA_VERSION#v}_linux_amd64.tar.gz"
+          sudo install -m 0755 copa /usr/local/bin/copa
+          copa -v
+
+      - name: Set up a BuildKit instance Copa can use (MergeOp + DiffOp)
+        id: buildkit
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Select BuildKit builder
+        run: echo "BUILDX_BUILDER=${{ steps.buildkit.outputs.name }}" >> "$GITHUB_ENV"
+
+      - name: Show Docker / BuildKit context (diagnostics)
+        run: |
+          set -eux
+          docker version
+          docker buildx version
+          docker buildx inspect --bootstrap
+          docker info --format '{{json .}}' \
+            | jq '{ServerVersion, OperatingSystem, KernelVersion, DefaultRuntime}' || true
+
+      - name: Build and install copa-wiz test release
+
+        env:
+          COPA_WIZ_VERSION: v0.1.0
+          COPA_WIZ_REPO: bitvavo/copa-wiz
+          GH_TOKEN: ${{ secrets.COPACETIC_RELEASE_TOKEN }}
+        run: |
+          set -euxo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing COPACETIC_RELEASE_TOKEN secret (needs contents:read on ${COPACETIC_REPO})."
+            exit 1
+          fi
+
+          gh release download "${COPA_WIZ_VERSION}" \
+            --repo "${COPA_WIZ_REPO}" \
+            --pattern "copa-wiz_${COPA_WIZ_VERSION#v}_linux_amd64.tar.gz" \
+            --dir .
+          tar -xzf "copa-wiz_${COPA_WIZ_VERSION#v}_linux_amd64.tar.gz"
+          sudo install -m 0755 copa-wiz /usr/local/bin/copa-wiz
+
+      - name: Verify scanner output for the report being patched
+        run: |
+          set -euxo pipefail
+          copa-wiz testdata/nginx-wiz-report.json \
+            | tee /tmp/copa-wiz-manifest.json \
+            | jq '{
+                apiVersion,
+                metadata,
+                update_count: (.updates | length),
+                first_three:  (.updates[0:3])
+              }'
+          count="$(jq '.updates | length' /tmp/copa-wiz-manifest.json)"
+          if [ "${count}" -eq 0 ]; then
+            echo "::error::copa-wiz produced 0 updates for testdata/nginx-wiz-report.json on this runner"
+            exit 1
+          fi
+
+      - name: Patch test image with copa-wiz plugin
+        run: |
+          set -euxo pipefail
+          docker pull nginx:1.21.6
+          # --debug surfaces the BuildKit driver used and the package-manager probe results,
+          # which is what you actually want when triaging "no package updates found".
+          copa patch --debug \
+            -r testdata/nginx-wiz-report.json \
+            -i nginx:1.21.6 \
+            --scanner wiz

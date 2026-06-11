@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest-4core
+    permissions:
+      contents: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.3.1
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: make test
+
+      - name: Build release archives
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euxo pipefail
+          version="${VERSION#v}"
+          mkdir -p dist/release
+
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            goos="${platform%/*}"
+            goarch="${platform#*/}"
+            archive="dist/release/copa-wiz_${version}_${goos}_${goarch}.tar.gz"
+
+            echo "==> Building ${goos}/${goarch}"
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
+              go build -ldflags="-s -w" -o dist/copa-wiz ./cmd/copa-wiz
+            tar -C dist -czf "${archive}" copa-wiz
+            rm dist/copa-wiz
+          done
+
+          (
+            cd dist/release
+            sha256sum copa-wiz_*.tar.gz > copa-wiz_checksums.txt
+          )
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euxo pipefail
+          gh release create "${VERSION}" \
+            --title "${VERSION}" \
+            --generate-notes \
+            dist/release/copa-wiz_*.tar.gz \
+            dist/release/copa-wiz_checksums.txt

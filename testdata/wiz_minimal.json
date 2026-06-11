@@ -1,0 +1,28 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "openssl",
+        "version": "3.0.16-1~deb12u1",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2025-15467",
+            "severity": "CRITICAL",
+            "fixedVersion": "3.0.18-1~deb12u2"
+          }
+        ]
+      },
+      {
+        "name": "libc6",
+        "version": "2.36-9+deb12u10",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2024-0001",
+            "fixedVersion": ""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Wrapper so Copacetic can find "copa-wiz" when this directory is on PATH:
+#   export PATH="/absolute/path/to/this-repo/scripts:$PATH"
+# Prefer a pre-built binary from `make build`.
+# Optional fallback to `go run` only when COPA_WIZ_ALLOW_GO_RUN=1.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GOOS="$(go env GOOS)"
+GOARCH="$(go env GOARCH)"
+BIN="${ROOT}/dist/${GOOS}_${GOARCH}/release/copa-wiz"
+if [[ -x "$BIN" ]]; then
+	exec "$BIN" "$@"
+fi
+if [[ "${COPA_WIZ_ALLOW_GO_RUN:-0}" == "1" ]]; then
+	cd "$ROOT"
+	exec go run ./cmd/copa-wiz "$@"
+fi
+echo "copa-wiz binary not found at $BIN" >&2
+echo "Run 'make build' (recommended), or set COPA_WIZ_ALLOW_GO_RUN=1 to permit go run fallback." >&2
+exit 1
