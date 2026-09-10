@@ -1,0 +1,31 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "openssl-libs",
+        "version": "1.1.1k-14.el8_10",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2025-10128",
+            "fixedVersion": "1.1.1k-15.el8_10",
+            "source": "https://access.redhat.com/errata/RHSA-2025:10128"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "openssl-libs",
+        "version": "1.1.1k-14.el8_10",
+        "type": {
+          "osPackageManager": "RPM"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "registry.access.redhat.com/ubi8/ubi:8.10"
+  }
+}

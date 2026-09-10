@@ -1,0 +1,42 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "openssl-libs",
+        "version": "3.5.7-2.amzn2023.0.1",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-14456",
+            "fixedVersion": "1:3.5.7-2.amzn2023.0.2",
+            "source": "https://alas.aws.amazon.com/AL2023/ALAS-2026-2088.html"
+          }
+        ]
+      },
+      {
+        "name": "python3-pip-wheel",
+        "version": "21.3.1-2.amzn2023.0.20",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-45409",
+            "fixedVersion": "21.3.1-2.amzn2023.0.21",
+            "source": "https://alas.aws.amazon.com/AL2023/ALAS-2026-2092.html"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "openssl-fips-provider-latest",
+        "version": "3.5.7",
+        "type": {
+          "osPackageManager": "RPM"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "amazonlinux:2023"
+  }
+}

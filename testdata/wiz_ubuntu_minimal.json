@@ -1,0 +1,42 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "libc6",
+        "version": "2.35-0ubuntu3.14",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2022-27943",
+            "fixedVersion": "2.35-0ubuntu3.15",
+            "source": "https://ubuntu.com/security/CVE-2022-27943"
+          }
+        ]
+      },
+      {
+        "name": "libpam0g",
+        "version": "1.4.0-11ubuntu2.4",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2021-31879",
+            "fixedVersion": "",
+            "source": "https://ubuntu.com/security/CVE-2021-31879"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "libc6",
+        "version": "2.35-0ubuntu3.14",
+        "type": {
+          "osPackageManager": "DPKG"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "eclipse-temurin:17-jre-jammy"
+  }
+}

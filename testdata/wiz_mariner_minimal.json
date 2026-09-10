@@ -1,0 +1,31 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "openssl",
+        "version": "1.1.1k-35.cm2",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2024-0001",
+            "fixedVersion": "1.1.1k-36.cm2",
+            "source": "https://github.com/microsoft/CBL-MarinerVulnerabilityData"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "openssl",
+        "version": "1.1.1k-35.cm2",
+        "type": {
+          "osPackageManager": "RPM"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+  }
+}

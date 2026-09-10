@@ -24,11 +24,11 @@ jobs:
         env:
           COPA_VERSION: v0.14.0
           COPACETIC_REPO: bitvavo/copacetic
-          GH_TOKEN: ${{ secrets.COPACETIC_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPA_RELEASE_TOKEN }}
         run: |
           set -euxo pipefail
           if [ -z "${GH_TOKEN}" ]; then
-            echo "::error::Missing COPACETIC_RELEASE_TOKEN secret (needs contents:read on ${COPACETIC_REPO})."
+            echo "::error::Missing COPA_RELEASE_TOKEN secret (needs contents:read on ${COPACETIC_REPO})."
             exit 1
           fi
           gh release download "${COPA_VERSION}" \
@@ -60,13 +60,13 @@ jobs:
       - name: Build and install copa-wiz test release
 
         env:
-          COPA_WIZ_VERSION: v0.1.0
+          COPA_WIZ_VERSION: v0.1.1
           COPA_WIZ_REPO: bitvavo/copa-wiz
-          GH_TOKEN: ${{ secrets.COPACETIC_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPA_RELEASE_TOKEN }}
         run: |
           set -euxo pipefail
           if [ -z "${GH_TOKEN}" ]; then
-            echo "::error::Missing COPACETIC_RELEASE_TOKEN secret (needs contents:read on ${COPACETIC_REPO})."
+            echo "::error::Missing COPA_RELEASE_TOKEN secret (needs contents:read on ${COPA_WIZ_REPO})."
             exit 1
           fi
 
@@ -80,7 +80,9 @@ jobs:
       - name: Verify scanner output for the report being patched
         run: |
           set -euxo pipefail
-          copa-wiz testdata/nginx-wiz-report.json \
+          # Debian 12 (bookworm) — Debian 11 / nginx:1.21.6 is EOL (LTS ended 2026-08-31),
+          # so apt-get update in Copa's tooling image fails with exit 100.
+          copa-wiz testdata/debian12-wiz-report.json \
             | tee /tmp/copa-wiz-manifest.json \
             | jq '{
                 apiVersion,
@@ -88,19 +90,25 @@ jobs:
                 update_count: (.updates | length),
                 first_three:  (.updates[0:3])
               }'
+          os_type="$(jq -r '.metadata.os.type' /tmp/copa-wiz-manifest.json)"
+          os_version="$(jq -r '.metadata.os.version' /tmp/copa-wiz-manifest.json)"
+          if [ "${os_type}" != "debian" ] || [ "${os_version}" != "12" ]; then
+            echo "::error::expected metadata.os debian/12, got ${os_type}/${os_version}"
+            exit 1
+          fi
           count="$(jq '.updates | length' /tmp/copa-wiz-manifest.json)"
           if [ "${count}" -eq 0 ]; then
-            echo "::error::copa-wiz produced 0 updates for testdata/nginx-wiz-report.json on this runner"
+            echo "::error::copa-wiz produced 0 updates for testdata/debian12-wiz-report.json on this runner"
             exit 1
           fi
 
       - name: Patch test image with copa-wiz plugin
         run: |
           set -euxo pipefail
-          docker pull nginx:1.21.6
+          docker pull debian:12-slim
           # --debug surfaces the BuildKit driver used and the package-manager probe results,
           # which is what you actually want when triaging "no package updates found".
           copa patch --debug \
-            -r testdata/nginx-wiz-report.json \
-            -i nginx:1.21.6 \
+            -r testdata/debian12-wiz-report.json \
+            -i debian:12-slim \
             --scanner wiz
