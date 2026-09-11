@@ -20,10 +20,49 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Check out code
+      # Always build the commit the tag points at (github.sha) for release testing.
+      - name: Check out tagged commit
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Assert release source is the tagged commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euxo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          echo "tag=${TAG}"
+          echo "event_sha=${EXPECTED_SHA}"
+          echo "head_sha=${head_sha}"
+          echo "default_branch=${DEFAULT_BRANCH}"
+
+          if [ "${head_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "::error::Checked out ${head_sha}, expected tagged commit ${EXPECTED_SHA}"
+            exit 1
+          fi
+
+          # Annotated tags peel to a commit; require an exact tag match on HEAD.
+          matched="$(git tag --points-at HEAD | grep -Fx "${TAG}" || true)"
+          if [ -z "${matched}" ]; then
+            echo "::error::Tag ${TAG} does not point at checked-out commit ${head_sha}"
+            exit 1
+          fi
+
+          # Guard against accidentally releasing the default branch tip when the
+          # tag was meant to capture a feature-branch commit that isn't on main.
+          if git rev-parse --verify "origin/${DEFAULT_BRANCH}" >/dev/null 2>&1; then
+            default_sha="$(git rev-parse "origin/${DEFAULT_BRANCH}")"
+            echo "default_branch_sha=${default_sha}"
+            if [ "${head_sha}" = "${default_sha}" ]; then
+              echo "::notice::Tagged commit is currently the tip of ${DEFAULT_BRANCH}"
+            else
+              echo "::notice::Tagged commit differs from ${DEFAULT_BRANCH} tip; releasing feature/tag tip ${head_sha}"
+            fi
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -34,13 +73,41 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Smoke-test release binary (multi-OS)
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/copa-wiz-smoke ./cmd/copa-wiz
+
+          assert_os() {
+            local report="$1"
+            local want="$2"
+            local got
+            got="$(./dist/copa-wiz-smoke "${report}" | jq -r '.metadata.os.type')"
+            if [ "${got}" != "${want}" ]; then
+              echo "::error::Expected OS type '${want}' from ${report}, got '${got}'"
+              exit 1
+            fi
+            echo "OK ${report} -> ${got}"
+          }
+
+          assert_os testdata/debian12-wiz-report.json debian
+          assert_os testdata/wiz_alpine_minimal.json alpine
+          assert_os testdata/wiz_ubuntu_minimal.json ubuntu
+          assert_os testdata/wiz_amazon_minimal.json amazon
+          assert_os testdata/wiz_redhat_minimal.json redhat
+          assert_os testdata/wiz_mariner_minimal.json cbl-mariner
+
       - name: Build release archives
         env:
           VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: |
           set -euxo pipefail
           version="${VERSION#v}"
           mkdir -p dist/release
+
+          echo "Building release ${VERSION} from commit ${COMMIT}"
 
           for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             goos="${platform%/*}"
@@ -49,7 +116,7 @@ jobs:
 
             echo "==> Building ${goos}/${goarch}"
             GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
-              go build -ldflags="-s -w" -o dist/copa-wiz ./cmd/copa-wiz
+              go build -trimpath -ldflags="-s -w" -o dist/copa-wiz ./cmd/copa-wiz
             tar -C dist -czf "${archive}" copa-wiz
             rm dist/copa-wiz
           done
@@ -59,14 +126,21 @@ jobs:
             sha256sum copa-wiz_*.tar.gz > copa-wiz_checksums.txt
           )
 
+          echo "Release artifacts:"
+          ls -la dist/release
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: |
           set -euxo pipefail
           gh release create "${VERSION}" \
+            --verify-tag \
+            --target "${COMMIT}" \
             --title "${VERSION}" \
+            --notes "Built from \`${COMMIT}\`." \
             --generate-notes \
             dist/release/copa-wiz_*.tar.gz \
             dist/release/copa-wiz_checksums.txt
