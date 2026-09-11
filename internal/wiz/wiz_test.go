@@ -167,10 +167,10 @@ func TestParser_Parse_alpineMinimal(t *testing.T) {
 	}
 }
 
-func TestParser_Parse_alpineMissingVersionWithUpdatesErrors(t *testing.T) {
+func TestParser_Parse_amazonCorretto17AlpineUsesFallback(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "alpine-no-tag.json")
+	path := filepath.Join(dir, "corretto-17-alpine.json")
 	content := `{
   "result": {
     "__typename": "CICDDiskScanResult",
@@ -186,17 +186,26 @@ func TestParser_Parse_alpineMissingVersionWithUpdatesErrors(t *testing.T) {
     "vulnerableSBOMArtifactsByNameVersion": [
       {"type": {"osPackageManager": "APK"}}
     ]
+  },
+  "scanOriginResource": {
+    "name": "amazoncorretto:17-alpine"
   }
 }`
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	_, err := NewParser().Parse(path)
-	if err == nil {
-		t.Fatal("expected Alpine release inference error when updates exist without image tag")
+	got, err := NewParser().Parse(path)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
 	}
-	if !strings.Contains(err.Error(), "Alpine release") {
-		t.Fatalf("error = %v, want Alpine release", err)
+	if got.Metadata.OS.Type != "alpine" {
+		t.Fatalf("OS.Type = %q, want alpine", got.Metadata.OS.Type)
+	}
+	if got.Metadata.OS.Version != alpineVersionFallback {
+		t.Fatalf("OS.Version = %q, want fallback %q", got.Metadata.OS.Version, alpineVersionFallback)
+	}
+	if len(got.Updates) != 1 {
+		t.Fatalf("updates = %d, want 1", len(got.Updates))
 	}
 }
 
@@ -427,6 +436,18 @@ func Test_inferOSAndArch(t *testing.T) {
 				}},
 			},
 			wantType: "alpine", wantVersion: "3.22.4",
+		},
+		{
+			name: "alpine series embedded in corretto-style tag",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "amazoncorretto:21-alpine3.19"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "libcrypto3", Version: "3.1.4-r5"},
+				}, VulnerableSBOMArtifactsByNameVersion: []sbomArtifact{
+					{Type: &sbomType{OSPackageManager: "APK"}},
+				}},
+			},
+			wantType: "alpine", wantVersion: "3.19",
 		},
 		{
 			name: "alpine without image tag has empty version",

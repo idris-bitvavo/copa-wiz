@@ -50,6 +50,11 @@ var debReleaseRe = regexp.MustCompile(`deb(\d+)u`)
 var debAltReleaseRe = regexp.MustCompile(`\+deb(\d+)`)
 var apkVersionRe = regexp.MustCompile(`-r\d+$`)
 var alpineImageTagRe = regexp.MustCompile(`(?i)(?:^|/)alpine:([0-9]+(?:\.[0-9]+)*)`)
+// Corretto-style tags embed the series (e.g. 21-alpine3.19).
+var alpineEmbeddedTagRe = regexp.MustCompile(`(?i)alpine[_-]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
+// Fallback when the tag is only "...-alpine" (e.g. amazoncorretto:17-alpine).
+// Copacetic requires non-empty metadata.os.version; apk does not use the series.
+const alpineVersionFallback = "3.20"
 var amznReleaseRe = regexp.MustCompile(`\.amzn(\d+)`)
 var amazonLinuxImageTagRe = regexp.MustCompile(`(?i)(?:^|/)amazonlinux:([0-9]+)`)
 var amazonCorrettoALRe = regexp.MustCompile(`(?i)\bal(\d{4})\b`)
@@ -282,7 +287,11 @@ func isAlpineReport(r *report) bool {
 
 func inferAlpineRelease(r *report) string {
 	if r != nil && r.ScanOriginResource != nil {
-		if m := alpineImageTagRe.FindStringSubmatch(r.ScanOriginResource.Name); len(m) == 2 {
+		name := r.ScanOriginResource.Name
+		if m := alpineImageTagRe.FindStringSubmatch(name); len(m) == 2 {
+			return m[1]
+		}
+		if m := alpineEmbeddedTagRe.FindStringSubmatch(name); len(m) == 2 {
 			return m[1]
 		}
 	}
@@ -544,12 +553,6 @@ func requireReleaseWhenPatching(osType, osVersion string, updateCount int) error
 		if osVersion == "" {
 			return fmt.Errorf("could not infer Ubuntu release (expected YY.04 in package versions, ubuntu:YY.04 image tags, or a codename like jammy)")
 		}
-	case "alpine":
-		// Copacetic requires a non-empty OS version in report metadata before
-		// GetPackageManager (patch/core.go), even though apk uses no tooling image.
-		if osVersion == "" {
-			return fmt.Errorf("could not infer Alpine release (expected alpine:X.Y or alpine:X.Y.Z in scanOriginResource image name)")
-		}
 	case "amazon":
 		if osVersion == "" {
 			return fmt.Errorf("could not infer Amazon Linux release (expected .amznYYYY in package versions or amazonlinux:/alYYYY image tags)")
@@ -638,7 +641,11 @@ func (p *Parser) Parse(file string) (*v1alpha1.UpdateManifest, error) {
 		}
 	}
 
-	if err := requireReleaseWhenPatching(osType, osVersion, len(updates.Updates)); err != nil {
+	if osType == "alpine" && updates.Metadata.OS.Version == "" && len(updates.Updates) > 0 {
+		updates.Metadata.OS.Version = alpineVersionFallback
+	}
+
+	if err := requireReleaseWhenPatching(osType, updates.Metadata.OS.Version, len(updates.Updates)); err != nil {
 		return nil, err
 	}
 
