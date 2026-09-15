@@ -400,11 +400,11 @@ func TestParser_Parse_unsupportedOSErrors(t *testing.T) {
 
 func Test_inferDebianRelease(t *testing.T) {
 	t.Parallel()
-	pkgs := []osPackage{
+	r := &report{Result: &diskScanResult{OSPackages: []osPackage{
 		{Name: "openssl", Version: "3.0.16-1~deb12u1"},
-	}
-	if v := inferDebianRelease(pkgs); v != "12" {
-		t.Fatalf("inferDebianRelease = %q, want 12", v)
+	}}}
+	if v := versionDebian(r); v != "12" {
+		t.Fatalf("versionDebian = %q, want 12", v)
 	}
 }
 
@@ -520,6 +520,70 @@ func Test_inferOSAndArch(t *testing.T) {
 				{Name: "openssl-libs", Version: "3.5.7-2.amzn2023.0.1"},
 			}}},
 			wantType: "amazon", wantVersion: "2023",
+		},
+		{
+			name: "amazon from al2023 image tag without package markers",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "amazoncorretto:17-al2023"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "bash", Version: "5.2.15-1.amzn2023.0.1"},
+				}},
+			},
+			wantType: "amazon", wantVersion: "2023",
+		},
+		{
+			name: "debian from debian:12 image tag",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "docker.io/library/debian:12-slim"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "bash", Version: "5.2.15-2+b2", Vulnerabilities: []vulnerability{
+						{Source: "https://security-tracker.debian.org/"},
+					}},
+				}},
+			},
+			wantType: "debian", wantVersion: "12",
+		},
+		{
+			name: "debian from base-files when no debNu token",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "myapp:1"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "base-files", Version: "12.4"},
+				}},
+			},
+			wantType: "debian", wantVersion: "12",
+		},
+		{
+			name: "redhat ubi major from image when packages lack .elN",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "registry.access.redhat.com/ubi8/ubi:latest"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "bash", Version: "4.4.20-5"},
+				}},
+			},
+			wantType: "redhat", wantVersion: "8",
+		},
+		{
+			name: "mariner from image tag",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "mcr.microsoft.com/cbl-mariner/base/core:2.0"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "openssl", Version: "1.1.1k-1"},
+				}},
+			},
+			wantType: "cbl-mariner", wantVersion: "2.0",
+		},
+		{
+			name: "alpine from -alpine suffix without series uses empty until defaults",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "amazoncorretto:17-alpine"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "busybox", Version: "1.36.1-r0"},
+				}, VulnerableSBOMArtifactsByNameVersion: []sbomArtifact{
+					{Type: &sbomType{OSPackageManager: "APK"}},
+				}},
+			},
+			wantType: "alpine", wantVersion: "",
 		},
 		{
 			name: "redhat from access.redhat.com and el8",
@@ -762,7 +826,7 @@ func TestParser_Parse_azurelinuxImageWithoutReleaseErrorsWhenFixable(t *testing.
 	if err == nil {
 		t.Fatal("expected release inference error")
 	}
-	if !strings.Contains(err.Error(), "Azure Linux release") {
-		t.Fatalf("error = %v, want Azure Linux release", err)
+	if !strings.Contains(err.Error(), "azurelinux release") {
+		t.Fatalf("error = %v, want azurelinux release", err)
 	}
 }
