@@ -14,7 +14,7 @@ Learn more: [Copacetic scanner plugins](https://project-copacetic.github.io/copa
 - Emits one **`updates[]`** row per **fixable** vulnerability (non-empty `fixedVersion`), matching how the built-in **Trivy** parser works. Copacetic then **deduplicates by package** and keeps the **latest** valid fixed version.
 - Infers **`metadata.os`** for:
   - **Debian** — `type=debian`, version from `debNNu` / `+debNN` (e.g. **`12`**).
-  - **Ubuntu** — `type=ubuntu` from `ubuntu` version tokens, `ubuntu.com` sources, `ubuntu:` image refs, or codenames (`jammy` → **`22.04`**); version from `YY.04` in package strings or image tags (`ubuntu:22.04`).
+  - **Ubuntu** — `type=ubuntu` from `ubuntu` version tokens, `ubuntu.com` sources, `ubuntu:` image refs, or codenames (`jammy` → **`22.04`**); version from `YY.04` in package strings, image tags (`ubuntu:22.04`), codenames, or the **glibc series** on `libc6` / `libc-bin` / `locales` (e.g. `2.39-0ubuntu8.8` → **`24.04`**) when `YY.04` is absent.
   - **Alpine** — `type=alpine` from APK / `-rN` / `alpinelinux.org` / `alpine:` image tags; version from the image tag (`alpine:3.22.4` → **`3.22.4`**). A version is **required when updates exist** (Copacetic rejects empty `metadata.os.version`).
   - **Amazon Linux** — `type=amazon` from `.amznYYYY`, ALAS sources, or `amazonlinux` / `amazoncorretto` images.
   - **Red Hat** — `type=redhat` only with RHEL-specific evidence (`access.redhat.com` sources and/or `rhel` / `redhat` / `ubi` image names); release from `.elN`. Plain `.elN` alone is **not** enough (shared with CentOS/Alma/Rocky).

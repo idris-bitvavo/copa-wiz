@@ -1,0 +1,53 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "libc6",
+        "version": "2.39-0ubuntu8.8",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-80489",
+            "fixedVersion": "2.39-0ubuntu8.9",
+            "source": "https://ubuntu.com/security/CVE-2026-80489"
+          }
+        ]
+      },
+      {
+        "name": "python3.12",
+        "version": "3.12.3-1ubuntu0.16",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-10001",
+            "fixedVersion": "3.12.3-1ubuntu0.17",
+            "source": "https://ubuntu.com/security/CVE-2026-10001"
+          }
+        ]
+      },
+      {
+        "name": "libcurl3t64-gnutls",
+        "version": "8.5.0-2ubuntu10.13",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-13608",
+            "fixedVersion": null,
+            "source": "https://ubuntu.com/security/CVE-2026-13608"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "libc6",
+        "version": "2.39-0ubuntu8.8",
+        "type": {
+          "osPackageManager": "DPKG"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "gradle:8.14.5-jdk17"
+  }
+}

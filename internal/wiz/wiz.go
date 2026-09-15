@@ -61,6 +61,8 @@ var amazonCorrettoALRe = regexp.MustCompile(`(?i)\bal(\d{4})\b`)
 var ubuntuTokenRe = regexp.MustCompile(`(?i)ubuntu`)
 var ubuntuYYMMRe = regexp.MustCompile(`(?:^|[^0-9])(1[8-9]\.04|2[0-9]\.04)(?:[^0-9]|$)`)
 var ubuntuImageTagRe = regexp.MustCompile(`(?i)(?:^|/)ubuntu:([0-9]+\.[0-9]+)`)
+// glibc upstream version prefix on Ubuntu libc packages (e.g. 2.39-0ubuntu8.8).
+var ubuntuGlibcVersionRe = regexp.MustCompile(`^(2\.\d+)(?:-|$)`)
 var elReleaseRe = regexp.MustCompile(`\.el([0-9]+)`)
 var cmReleaseRe = regexp.MustCompile(`\.cm([0-9]+)`)
 var azlReleaseRe = regexp.MustCompile(`\.azl([0-9]+)`)
@@ -74,6 +76,17 @@ var ubuntuCodenames = map[string]string{
 	"noble":    "24.04",
 	"oracular": "24.10",
 	"plucky":   "25.04",
+}
+
+// Ubuntu ships a given glibc upstream with each LTS/interim release. Used when
+// package versions contain "ubuntu" but not YY.04 (common for libc6 on noble).
+var ubuntuGlibcToRelease = map[string]string{
+	"2.27": "18.04",
+	"2.31": "20.04",
+	"2.35": "22.04",
+	"2.39": "24.04",
+	"2.40": "24.10",
+	"2.41": "25.04",
 }
 
 const maxReportSizeBytes int64 = 25 * 1024 * 1024 // 25 MiB
@@ -231,6 +244,10 @@ func inferUbuntuRelease(r *report) string {
 		}
 	}
 
+	if ver := inferUbuntuReleaseFromGlibc(r.Result.OSPackages); ver != "" {
+		return ver
+	}
+
 	if r.ScanOriginResource != nil {
 		name := r.ScanOriginResource.Name
 		// Numeric tags such as ubuntu:22.04 before codename fallback.
@@ -244,6 +261,27 @@ func inferUbuntuRelease(r *report) string {
 		for code, ver := range ubuntuCodenames {
 			if strings.Contains(lower, code) {
 				return ver
+			}
+		}
+	}
+	return ""
+}
+
+func inferUbuntuReleaseFromGlibc(pkgs []osPackage) string {
+	for _, p := range pkgs {
+		switch strings.ToLower(p.Name) {
+		case "libc6", "libc-bin", "locales", "libc6-dev":
+			if m := ubuntuGlibcVersionRe.FindStringSubmatch(p.Version); len(m) == 2 {
+				if ver, ok := ubuntuGlibcToRelease[m[1]]; ok {
+					return ver
+				}
+			}
+			for _, v := range p.Vulnerabilities {
+				if m := ubuntuGlibcVersionRe.FindStringSubmatch(v.FixedVersion); len(m) == 2 {
+					if ver, ok := ubuntuGlibcToRelease[m[1]]; ok {
+						return ver
+					}
+				}
 			}
 		}
 	}
@@ -551,7 +589,7 @@ func requireReleaseWhenPatching(osType, osVersion string, updateCount int) error
 		}
 	case "ubuntu":
 		if osVersion == "" {
-			return fmt.Errorf("could not infer Ubuntu release (expected YY.04 in package versions, ubuntu:YY.04 image tags, or a codename like jammy)")
+			return fmt.Errorf("could not infer Ubuntu release (expected YY.04 in package versions, libc6 glibc series, ubuntu:YY.04 image tags, or a codename like jammy)")
 		}
 	case "amazon":
 		if osVersion == "" {

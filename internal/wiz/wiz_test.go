@@ -295,6 +295,33 @@ func TestParser_Parse_ubuntuMinimal(t *testing.T) {
 	}
 }
 
+func TestParser_Parse_ubuntuNobleWithoutYY04(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		file        string
+		wantUpdates int
+	}{
+		{"wiz_ubuntu_flink_minimal.json", 2},
+		{"wiz_ubuntu_gradle_minimal.json", 2},
+		{"wiz_ubuntu_dotnet_runtime_minimal.json", 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			t.Parallel()
+			got, err := NewParser().Parse(testPath(tc.file))
+			if err != nil {
+				t.Fatalf("Parse %s: %v", tc.file, err)
+			}
+			if got.Metadata.OS.Type != "ubuntu" || got.Metadata.OS.Version != "24.04" {
+				t.Fatalf("OS = %s/%s, want ubuntu/24.04", got.Metadata.OS.Type, got.Metadata.OS.Version)
+			}
+			if len(got.Updates) != tc.wantUpdates {
+				t.Fatalf("updates = %d, want %d", len(got.Updates), tc.wantUpdates)
+			}
+		})
+	}
+}
+
 func TestParser_Parse_redhatMinimal(t *testing.T) {
 	t.Parallel()
 	got, err := NewParser().Parse(testPath("wiz_redhat_minimal.json"))
@@ -426,6 +453,30 @@ func Test_inferOSAndArch(t *testing.T) {
 				{Name: "curl", Version: "4.9-2ubuntu0.24.04.1"},
 			}}},
 			wantType: "ubuntu", wantVersion: "24.04",
+		},
+		{
+			name: "ubuntu from libc6 glibc series when image has no ubuntu/YY.04",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "flink:2.2.1-java21"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "libc6", Version: "2.39-0ubuntu8.8", Vulnerabilities: []vulnerability{
+						{Name: "CVE-1", FixedVersion: "2.39-0ubuntu8.9", Source: "https://ubuntu.com/security/CVE-1"},
+					}},
+				}},
+			},
+			wantType: "ubuntu", wantVersion: "24.04",
+		},
+		{
+			name: "ubuntu jammy from libc6 2.35 without codename in image",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "myapp:1.0"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "libc-bin", Version: "2.35-0ubuntu3.14", Vulnerabilities: []vulnerability{
+						{FixedVersion: "2.35-0ubuntu3.15", Source: "https://ubuntu.com/security/CVE-1"},
+					}},
+				}},
+			},
+			wantType: "ubuntu", wantVersion: "22.04",
 		},
 		{
 			name: "alpine from apk versions and image tag",

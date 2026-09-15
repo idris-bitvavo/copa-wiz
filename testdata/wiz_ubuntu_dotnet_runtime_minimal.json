@@ -1,0 +1,53 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "libc6",
+        "version": "2.39-0ubuntu8.8",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-80489",
+            "fixedVersion": "2.39-0ubuntu8.9",
+            "source": "https://ubuntu.com/security/CVE-2026-80489"
+          }
+        ]
+      },
+      {
+        "name": "libc-bin",
+        "version": "2.39-0ubuntu8.8",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-6368",
+            "fixedVersion": "2.39-0ubuntu8.9",
+            "source": "https://ubuntu.com/security/CVE-2026-6368"
+          }
+        ]
+      },
+      {
+        "name": "libsystemd0",
+        "version": "255.4-1ubuntu8.17",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-40228",
+            "fixedVersion": null,
+            "source": "https://ubuntu.com/security/CVE-2026-40228"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "libc6",
+        "version": "2.39-0ubuntu8.8",
+        "type": {
+          "osPackageManager": "DPKG"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "ghcr.io/example/dotnet/runtime:10.0"
+  }
+}
