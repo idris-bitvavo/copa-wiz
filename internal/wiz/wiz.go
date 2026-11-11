@@ -96,9 +96,14 @@ func NewParser() *Parser {
 
 // Parse reads a Wiz JSON report from path and returns an UpdateManifest.
 //
-// OS type/version are reconstructed to match Copacetic’s Trivy contract
+// OS type/version are reconstructed to match Copacetic's Trivy contract
 // (metadata.os.type / metadata.os.version). Wiz rarely embeds /etc/os-release;
 // detection uses the ordered distro probe registry in os_detect.go.
+//
+// Optional env overrides (COPA_WIZ_OS_TYPE / COPA_WIZ_OS_VERSION) take precedence
+// so CI can inject values read from the image's /etc/os-release. That matters
+// because `copa patch --scanner wiz` re-invokes this plugin on the raw report;
+// editing a verify-step manifest with jq does not affect the patch.
 func (p *Parser) Parse(file string) (*v1alpha1.UpdateManifest, error) {
 	r, err := parseReport(file)
 	if err != nil {
@@ -120,6 +125,10 @@ func (p *Parser) Parse(file string) (*v1alpha1.UpdateManifest, error) {
 	}
 
 	osType, osVersion, arch := inferOSAndArch(r)
+	osType, osVersion, err = applyEnvOSOverrides(osType, osVersion)
+	if err != nil {
+		return nil, err
+	}
 	if osType == "" {
 		return nil, unsupportedOSError(r)
 	}

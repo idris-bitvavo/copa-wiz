@@ -1,0 +1,64 @@
+{
+  "result": {
+    "__typename": "CICDDiskScanResult",
+    "osPackages": [
+      {
+        "name": "openssl",
+        "version": "3.5.7-2.ph5",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-18798",
+            "fixedVersion": "3.5.8-0.1.ph5",
+            "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-18798"
+          }
+        ]
+      },
+      {
+        "name": "libsolv",
+        "version": "0.7.35-1.ph5",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-48863",
+            "fixedVersion": "0.7.39-1.ph5",
+            "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-48863"
+          }
+        ]
+      },
+      {
+        "name": "nss-libs",
+        "version": "3.78-12.ph5",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2026-16389",
+            "fixedVersion": "3.78-13.ph5",
+            "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-16389"
+          }
+        ]
+      },
+      {
+        "name": "krb5",
+        "version": "1.20.2-13.ph5",
+        "vulnerabilities": [
+          {
+            "name": "CVE-2025-3576",
+            "fixedVersion": null,
+            "source": "https://nvd.nist.gov/vuln/detail/CVE-2025-3576"
+          }
+        ]
+      }
+    ],
+    "vulnerableSBOMArtifactsByNameVersion": [
+      {
+        "name": "openssl",
+        "version": "3.5.7-2.ph5",
+        "type": {
+          "osPackageManager": "RPM"
+        }
+      }
+    ]
+  },
+  "scanOriginResource": {
+    "__typename": "CICDScanOriginContainerImage",
+    "name": "bitnami/postgresql:latest"
+  }
+}

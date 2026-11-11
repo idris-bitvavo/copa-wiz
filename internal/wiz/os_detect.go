@@ -2,6 +2,7 @@ package wiz
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -18,14 +19,25 @@ const (
 	osRedHat     = "redhat"
 	osMariner    = "cbl-mariner"
 	osAzureLinux = "azurelinux"
+	osPhoton     = "photon"
+
+	// Env overrides for CI: set from the image's /etc/os-release so both the
+	// verify step and Copacetic's re-invoked copa-wiz see the same OS.
+	envOSType    = "COPA_WIZ_OS_TYPE"
+	envOSVersion = "COPA_WIZ_OS_VERSION"
 )
 
 // Alpine last-resort when updates exist but no series is in the image tag
 // (e.g. amazoncorretto:17-alpine). Prefer an explicit alpine:X.Y / alpineX.Y tag.
 const alpineVersionFallback = "3.20"
 
+var supportedOSTypes = map[string]struct{}{
+	osDebian: {}, osUbuntu: {}, osAlpine: {}, osAmazon: {},
+	osRedHat: {}, osMariner: {}, osAzureLinux: {}, osPhoton: {},
+}
+
 var supportedDistros = strings.Join([]string{
-	osDebian, osUbuntu, osAlpine, osAmazon, osRedHat, osMariner, osAzureLinux,
+	osDebian, osUbuntu, osAlpine, osAmazon, osRedHat, osMariner, osAzureLinux, osPhoton,
 }, ", ")
 
 // distroProbe identifies a distro and extracts a Trivy-shaped version string.
@@ -65,6 +77,13 @@ var (
 
 	azlReleaseRe         = regexp.MustCompile(`\.azl([0-9]+)`)
 	azureLinuxImageTagRe = regexp.MustCompile(`(?i)azurelinux[^:]*:([0-9]+(?:\.[0-9]+)?)`)
+
+	// VMware Photon OS (Bitnami bases): package release suffix .phN
+	photonReleaseRe  = regexp.MustCompile(`\.ph([0-9]+)(?:[^0-9]|$)`)
+	photonImageTagRe = regexp.MustCompile(`(?i)(?:^|/)photon[^:]*:([0-9]+(?:\.[0-9]+)?)`)
+	photonEmbeddedRe = regexp.MustCompile(`(?i)photon[_-]([0-9]+(?:\.[0-9]+)?)`)
+
+	ubuntuSystemdMajorRe = regexp.MustCompile(`^(\d+)\.`)
 )
 
 // Ubuntu DISTRIB_CODENAME → VERSION_ID (Trivy Name).
@@ -106,12 +125,24 @@ var ubuntuGlibcToRelease = map[string]string{
 	"2.41": "25.04",
 }
 
-// Ordered like Trivy’s merge rules: Debian markers beat Ubuntu; Azure before Mariner.
+// systemd major shipped with Ubuntu LTS / interim releases (libsystemd0 / systemd / libudev1).
+var ubuntuSystemdToRelease = map[string]string{
+	"237": "18.04",
+	"245": "20.04",
+	"249": "22.04",
+	"253": "23.04",
+	"255": "24.04",
+	"256": "24.10",
+	"257": "25.04",
+}
+
+// Ordered like Trivy's merge rules: Debian markers beat Ubuntu; Azure before Mariner.
 var distroProbes = []distroProbe{
 	{Type: osDebian, Match: matchDebian, Version: versionDebian},
 	{Type: osUbuntu, Match: matchUbuntu, Version: versionUbuntu},
 	{Type: osAlpine, Match: matchAlpine, Version: versionAlpine},
 	{Type: osAmazon, Match: matchAmazon, Version: versionAmazon},
+	{Type: osPhoton, Match: matchPhoton, Version: versionPhoton},
 	{Type: osAzureLinux, Match: matchAzureLinux, Version: versionAzureLinux},
 	{Type: osMariner, Match: matchMariner, Version: versionMariner},
 	{Type: osRedHat, Match: matchRedHat, Version: versionRedHat},
@@ -130,6 +161,37 @@ func inferOSAndArch(r *report) (osType, osVersion, arch string) {
 		return p.Type, ver, arch
 	}
 	return "", "", arch
+}
+
+// applyEnvOSOverrides layers COPA_WIZ_OS_TYPE / COPA_WIZ_OS_VERSION on top of
+// probe inference. Used by CI after reading /etc/os-release from the image so
+// Copacetic's re-invoked plugin gets the same OS as the verify step.
+func applyEnvOSOverrides(osType, osVersion string) (string, string, error) {
+	envType := strings.TrimSpace(strings.ToLower(os.Getenv(envOSType)))
+	envVer := strings.TrimSpace(os.Getenv(envOSVersion))
+
+	if envType == "" && envVer == "" {
+		return osType, osVersion, nil
+	}
+
+	if envType != "" {
+		if _, ok := supportedOSTypes[envType]; !ok {
+			return "", "", fmt.Errorf("invalid %s=%q; supported: %s", envOSType, envType, supportedDistros)
+		}
+		osType = envType
+	}
+	if envVer != "" {
+		if osType == "" {
+			return "", "", fmt.Errorf("%s is set but OS type is unknown; set %s as well", envOSVersion, envOSType)
+		}
+		osVersion = normalizeOSVersion(osType, envVer)
+	} else if osType != "" && osVersion != "" {
+		osVersion = normalizeOSVersion(osType, osVersion)
+	}
+
+	fmt.Fprintf(os.Stderr, "copa-wiz: using OS override type=%q version=%q (from %s/%s)\n",
+		osType, osVersion, envOSType, envOSVersion)
+	return osType, osVersion, nil
 }
 
 // normalizeOSVersion shapes versions to what Copacetic tooling expects
@@ -163,7 +225,8 @@ func normalizeOSVersion(osType, version string) string {
 			return fields[0]
 		}
 		return version
-	case osMariner, osAzureLinux:
+	case osMariner, osAzureLinux, osPhoton:
+		// Trivy Photon Name is typically VERSION_ID like "5.0".
 		if !strings.Contains(version, ".") {
 			return version + ".0"
 		}
@@ -198,12 +261,13 @@ func requireReleaseWhenPatching(osType, osVersion string, updateCount int) error
 	}
 	hints := map[string]string{
 		osDebian:     "expected debNNu/+debNN in package versions or debian:N image tags",
-		osUbuntu:     "expected YY.04 in package versions, libc6 glibc series, ubuntu:YY.04 / codename image tags",
+		osUbuntu:     "expected YY.04 in package versions, libc6 glibc series, systemd major, ubuntu:YY.04 / codename image tags, or set COPA_WIZ_OS_VERSION",
 		osAlpine:     "expected alpine:X.Y or alpineX.Y in the image name",
 		osAmazon:     "expected .amznYYYY in package versions or amazonlinux:/alYYYY / al2023 image tags",
 		osRedHat:     "expected .elN in package versions or ubiN / rhel:N image tags",
 		osMariner:    "expected .cmN in package versions or mariner:N image tags",
 		osAzureLinux: "expected .azlN in package versions or azurelinux:N image tags",
+		osPhoton:     "expected .phN in package versions or photon:N / photon-N image tags",
 	}
 	hint := hints[osType]
 	if hint == "" {
@@ -399,6 +463,9 @@ func versionUbuntu(r *report) string {
 	if v := versionUbuntuFromGlibc(r); v != "" {
 		return v
 	}
+	if v := versionUbuntuFromSystemd(r); v != "" {
+		return v
+	}
 	name := imageName(r)
 	if v := firstSubmatch(ubuntuImageTagRe, name); v != "" {
 		return v
@@ -410,6 +477,23 @@ func versionUbuntu(r *report) string {
 	for code, ver := range ubuntuCodenames {
 		if strings.Contains(lower, code) {
 			return ver
+		}
+	}
+	return ""
+}
+
+func versionUbuntuFromSystemd(r *report) string {
+	if r == nil || r.Result == nil {
+		return ""
+	}
+	for _, p := range r.Result.OSPackages {
+		switch strings.ToLower(p.Name) {
+		case "libsystemd0", "systemd", "libudev1", "udev":
+			if m := ubuntuSystemdMajorRe.FindStringSubmatch(p.Version); len(m) == 2 {
+				if ver, ok := ubuntuSystemdToRelease[m[1]]; ok {
+					return ver
+				}
+			}
 		}
 	}
 	return ""
@@ -570,6 +654,41 @@ func versionMariner(r *report) string {
 		return v
 	}
 	if v := firstSubmatch(marinerImageTagRe, imageName(r)); v != "" {
+		return v
+	}
+	return ""
+}
+
+// --- Photon OS (VMware / Bitnami) --------------------------------------------
+
+func matchPhoton(r *report) bool {
+	if firstSubmatchFromVersions(r, photonReleaseRe) != "" {
+		return true
+	}
+	name := imageNameLower(r)
+	if strings.Contains(name, "/photon:") || strings.HasPrefix(name, "photon:") ||
+		strings.Contains(name, "photon-") || strings.Contains(name, "_photon") {
+		return true
+	}
+	hit := false
+	eachVulnSource(r, func(src string) {
+		s := strings.ToLower(src)
+		if strings.Contains(s, "vmware.github.io/photon") || strings.Contains(s, "packages.vmware.com/photon") {
+			hit = true
+		}
+	})
+	return hit
+}
+
+func versionPhoton(r *report) string {
+	if v := firstSubmatchFromVersions(r, photonReleaseRe); v != "" {
+		return v
+	}
+	name := imageName(r)
+	if v := firstSubmatch(photonImageTagRe, name); v != "" {
+		return v
+	}
+	if v := firstSubmatch(photonEmbeddedRe, name); v != "" {
 		return v
 	}
 	return ""

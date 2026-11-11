@@ -60,7 +60,7 @@ jobs:
       - name: Build and install copa-wiz test release
 
         env:
-          COPA_WIZ_VERSION: v0.1.1
+          COPA_WIZ_VERSION: v0.1.2
           COPA_WIZ_REPO: bitvavo/copa-wiz
           GH_TOKEN: ${{ secrets.COPA_RELEASE_TOKEN }}
         run: |

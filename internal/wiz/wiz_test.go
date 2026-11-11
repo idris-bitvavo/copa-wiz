@@ -295,6 +295,76 @@ func TestParser_Parse_ubuntuMinimal(t *testing.T) {
 	}
 }
 
+func TestParser_Parse_ubuntuFlywayViaSystemd(t *testing.T) {
+	t.Parallel()
+	got, err := NewParser().Parse(testPath("wiz_ubuntu_flyway_minimal.json"))
+	if err != nil {
+		t.Fatalf("Parse flyway minimal: %v", err)
+	}
+	if got.Metadata.OS.Type != "ubuntu" || got.Metadata.OS.Version != "24.04" {
+		t.Fatalf("OS metadata: got %+v (want ubuntu/24.04 via systemd 255)", got.Metadata.OS)
+	}
+	if len(got.Updates) != 3 {
+		t.Fatalf("updates = %d, want 3", len(got.Updates))
+	}
+}
+
+func TestParser_Parse_envOSOverride(t *testing.T) {
+	t.Setenv(envOSType, "ubuntu")
+	t.Setenv(envOSVersion, "24.04")
+
+	// Report looks Amazon; override must win.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "override.json")
+	body := `{
+	  "result": {
+	    "osPackages": [{
+	      "name": "openssl-libs",
+	      "version": "3.5.7-2.amzn2023.0.1",
+	      "vulnerabilities": [{
+	        "name": "CVE-1",
+	        "fixedVersion": "3.5.7-2.amzn2023.0.2",
+	        "source": "https://alas.aws.amazon.com/"
+	      }]
+	    }]
+	  },
+	  "scanOriginResource": {"name": "amazonlinux:2023"}
+	}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewParser().Parse(path)
+	if err != nil {
+		t.Fatalf("Parse with override: %v", err)
+	}
+	if got.Metadata.OS.Type != "ubuntu" || got.Metadata.OS.Version != "24.04" {
+		t.Fatalf("OS = %+v, want ubuntu/24.04 from env", got.Metadata.OS)
+	}
+}
+
+func TestParser_Parse_envOSOverrideInvalidType(t *testing.T) {
+	t.Setenv(envOSType, "centos")
+	t.Setenv(envOSVersion, "8")
+	_, err := NewParser().Parse(testPath("wiz_minimal.json"))
+	if err == nil || !strings.Contains(err.Error(), envOSType) {
+		t.Fatalf("expected invalid %s error, got %v", envOSType, err)
+	}
+}
+
+func TestParser_Parse_photonMinimal(t *testing.T) {
+	t.Parallel()
+	got, err := NewParser().Parse(testPath("wiz_photon_postgresql_minimal.json"))
+	if err != nil {
+		t.Fatalf("Parse photon minimal: %v", err)
+	}
+	if got.Metadata.OS.Type != "photon" || got.Metadata.OS.Version != "5.0" {
+		t.Fatalf("OS metadata: got %+v", got.Metadata.OS)
+	}
+	if len(got.Updates) != 3 {
+		t.Fatalf("updates = %d, want 3", len(got.Updates))
+	}
+}
+
 func TestParser_Parse_ubuntuNobleWithoutYY04(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -530,6 +600,29 @@ func Test_inferOSAndArch(t *testing.T) {
 				}},
 			},
 			wantType: "amazon", wantVersion: "2023",
+		},
+		{
+			name: "photon from .ph5 package suffix",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "bitnami/postgresql:latest"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "openssl", Version: "3.5.7-2.ph5"},
+				}},
+			},
+			wantType: "photon", wantVersion: "5.0",
+		},
+		{
+			name: "ubuntu from systemd 255 without glibc or YY.04",
+			report: &report{
+				ScanOriginResource: &scanOriginResource{Name: "flyway/flyway:13.12.1"},
+				Result: &diskScanResult{OSPackages: []osPackage{
+					{Name: "libsystemd0", Version: "255.4-1ubuntu8.18", Vulnerabilities: []vulnerability{
+						{Source: "https://ubuntu.com/security/CVE-1"},
+					}},
+					{Name: "apt", Version: "2.8.3"},
+				}},
+			},
+			wantType: "ubuntu", wantVersion: "24.04",
 		},
 		{
 			name: "debian from debian:12 image tag",

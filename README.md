@@ -14,13 +14,15 @@ Learn more: [Copacetic scanner plugins](https://project-copacetic.github.io/copa
 - Emits one **`updates[]`** row per **fixable** vulnerability (non-empty `fixedVersion`), matching how the built-in **Trivy** parser works. Copacetic then **deduplicates by package** and keeps the **latest** valid fixed version.
 - Reconstructs **`metadata.os`** to the same Trivy-shaped contract Copacetic expects (`type` + `version`). Trivy reads `/etc/os-release` from the image; Wiz reports usually omit that, so the plugin uses an **ordered distro probe registry** (`internal/wiz/os_detect.go`) over package versions, vuln sources, SBOM package managers, and image names:
   - **Debian** — `debNNu` / `+debNN`, `debian:N` tags, or `base-files` major (without an `ubuntu` token).
-  - **Ubuntu** — `ubuntu` version tokens / `ubuntu.com` sources / `ubuntu:` or **codename** tags; version from `YY.MM`, **glibc** on `libc6`/`libc-bin`/`locales` (full series map), or codenames.
+  - **Ubuntu** — `ubuntu` version tokens / `ubuntu.com` sources / `ubuntu:` or **codename** tags; version from `YY.MM`, **glibc** on `libc6`/`libc-bin`/`locales`, **systemd** major on `libsystemd0`/`systemd`/`libudev1`, or codenames.
   - **Alpine** — APK / `-rN` / `alpinelinux.org` / `alpine` image tags (`alpine:X.Y`, `alpine3.19`, `*-alpine`); missing series with updates falls back to **`3.20`** (Copacetic requires non-empty version).
   - **Amazon Linux** — `.amznYYYY`, ALAS sources, `amazonlinux` / `amazoncorretto` / `al2` / `al2023` tags.
   - **Red Hat** — RHEL markers only (`access.redhat.com` and/or `rhel` / `redhat` / `ubiN`); release from `.elN` or `ubiN` / `rhel:N` tags. Plain `.elN` alone is **not** enough (CentOS/Alma/Rocky).
   - **CBL-Mariner** — `.cmN` / Mariner sources / `mariner` image tags → version `N.0`.
   - **Azure Linux** — `.azlN` / `azurelinux` tags/sources → version `N.0` (not classified as Mariner).
-- Versions are **normalized** once (debian/redhat major, ubuntu `YY.MM`, amazon bare year/`2`, mariner/azure `N.0`) so Copacetic tooling images resolve cleanly.
+  - **Photon OS** — `.phN` (Bitnami bases), `photon:N` / `photon-N` tags → version `N.0`. Copacetic may still refuse to *patch* Photon until it gains a Photon package manager.
+- Versions are **normalized** once (debian/redhat major, ubuntu `YY.MM`, amazon bare year/`2`, mariner/azure/photon `N.0`) so Copacetic tooling images resolve cleanly.
+- **CI OS override** — set `COPA_WIZ_OS_TYPE` and `COPA_WIZ_OS_VERSION` (from the image’s `/etc/os-release`) to override probe inference. This is the reliable path in workflows: `copa patch --scanner wiz` re-invokes `copa-wiz` on the raw Wiz report, so editing a verify-step manifest with `jq` does **not** affect the patch.
 - Reports with **no `result.osPackages`**, or a **supported OS with no fixable `fixedVersion`s**, succeed with an **empty `updates` list**.
 - Reports that **have `osPackages` but do not match a supported distro** return an **error** (with package-manager hints when present) so new OS families stay visible.
 - Sets **`metadata.config.arch`** to **`amd64`** by default (Wiz reports often omit image architecture).
@@ -38,7 +40,14 @@ Compatible with Wiz exports where:
 - Top level includes **`result`**.
 - **`result.osPackages`** lists objects with **`name`**, **`version`**, and **`vulnerabilities`** (may be null/empty for library-only scans).
 
-Minimal fixtures: Debian / Alpine / Amazon / Ubuntu / Red Hat / Mariner under `testdata/wiz_*_minimal.json`. CI patch job uses [`testdata/debian12-wiz-report.json`](testdata/debian12-wiz-report.json) with `debian:12-slim` (Debian 11 / `nginx:1.21.6` is EOL). Library-only empty-OS fixture: [`testdata/astral.json`](testdata/astral.json).
+Minimal fixtures: Debian / Alpine / Amazon / Ubuntu / Red Hat / Mariner / Photon under `testdata/wiz_*_minimal.json`. CI patch job uses [`testdata/debian12-wiz-report.json`](testdata/debian12-wiz-report.json) with `debian:12-slim` (Debian 11 / `nginx:1.21.6` is EOL). Library-only empty-OS fixture: [`testdata/astral.json`](testdata/astral.json).
+
+```shell
+# Optional: authoritative OS from the image (also used by CI)
+export COPA_WIZ_OS_TYPE=ubuntu
+export COPA_WIZ_OS_VERSION=24.04
+copa-wiz /path/to/wiz-report.json | jq .
+```
 
 ## Build
 
