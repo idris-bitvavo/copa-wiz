@@ -70,10 +70,3 @@ jobs:
             --generate-notes \
             dist/release/copa-wiz_*.tar.gz \
             dist/release/copa-wiz_checksums.txt
-
-      - name: Pinning retest (never runs)
-        if: ${{ false }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: /dev/null
-          key: pinning-retest
