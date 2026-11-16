@@ -78,3 +78,4 @@ go test ./...
 
 This project was derived from the official [scanner-plugin-template](https://github.com/project-copacetic/scanner-plugin-template) and adapted for **Wiz** container scan JSON.
  
+<!-- pinning idempotency retest: safe to remove -->
